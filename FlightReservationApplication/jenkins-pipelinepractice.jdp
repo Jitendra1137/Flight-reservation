@@ -8,15 +8,14 @@ pipeline {
     DB_USER = "admin"
     DB_PASS = "admin1234"
 
-    // --- App Info ---
+    // --- Application Info ---
     BACKEND_PORT = "8080"
-    FRONTEND_PORT = "80"
   }
 
   stages {
 
     /* --------------------------
-       1️⃣ CHECKOUT CODE
+       1️⃣  CHECKOUT CODE
     -------------------------- */
     stage('Checkout Code') {
       steps {
@@ -26,7 +25,7 @@ pipeline {
     }
 
     /* --------------------------
-       2️⃣ BUILD BACKEND
+       2️⃣  BUILD BACKEND
     -------------------------- */
     stage('Build Backend') {
       steps {
@@ -40,12 +39,12 @@ pipeline {
     }
 
     /* --------------------------
-       3️⃣ RUN BACKEND
+       3️⃣  RUN BACKEND
     -------------------------- */
     stage('Run Backend') {
       steps {
         sh '''
-          echo "🚀 Starting backend on port 8080..."
+          echo "🚀 Starting backend on port ${BACKEND_PORT}..."
           pkill -f 'java -jar' || true
           nohup java -jar FlightReservationApplication/target/*.jar > backend.log 2>&1 &
           sleep 5
@@ -55,7 +54,7 @@ pipeline {
     }
 
     /* --------------------------
-       4️⃣ BUILD FRONTEND
+       4️⃣  BUILD FRONTEND
     -------------------------- */
     stage('Build Frontend') {
       steps {
@@ -71,16 +70,29 @@ pipeline {
     }
 
     /* --------------------------
-       5️⃣ DEPLOY FRONTEND (Nginx)
+       5️⃣  DEPLOY FRONTEND (No sudo)
     -------------------------- */
     stage('Deploy Frontend') {
       steps {
         sh '''
           echo "🚀 Deploying frontend to Nginx..."
-          sudo rm -rf /var/www/html/*
-          sudo cp -r frontend/dist/* /var/www/html/
-          sudo systemctl restart nginx
+          rm -rf /var/www/html/*
+          cp -r frontend/dist/* /var/www/html/
+          systemctl restart nginx || true
           echo "✅ Frontend deployed successfully!"
+        '''
+      }
+    }
+
+    /* --------------------------
+       6️⃣  HEALTH CHECK
+    -------------------------- */
+    stage('Health Check') {
+      steps {
+        sh '''
+          echo "🔍 Checking services..."
+          echo "Backend:"; curl -I http://localhost:${BACKEND_PORT} || true
+          echo "Frontend:"; curl -I http://localhost || true
         '''
       }
     }
@@ -89,7 +101,7 @@ pipeline {
   post {
     success {
       echo "✅ Deployment Completed Successfully!"
-      echo "🌐 Backend:  http://<jenkins-public-ip>:8080"
+      echo "🌐 Backend:  http://<jenkins-public-ip>:${BACKEND_PORT}"
       echo "💻 Frontend: http://<jenkins-public-ip>"
     }
     failure {
