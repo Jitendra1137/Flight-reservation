@@ -2,12 +2,7 @@ pipeline {
   agent any
 
   environment {
-    DB_HOST = "database.cp2oyu6myvq8.ap-south-1.rds.amazonaws.com"
-    DB_NAME = "flightdb"
-    DB_USER = "admin"
-    DB_PASS = "admin1234"
-
-    BACKEND_PORT = "9090"  // ✅ changed port
+    BACKEND_PORT = "9090"
   }
 
   stages {
@@ -15,29 +10,6 @@ pipeline {
     stage('Checkout Code') {
       steps {
         git branch: 'main', url: 'https://github.com/Jitendra1137/Flight-reservation.git'
-      }
-    }
-
-    stage('Build Backend') {
-      steps {
-        dir('FlightReservationApplication') {
-          sh '''
-            echo "⚙️ Building Spring Boot backend..."
-            mvn clean package -DskipTests
-          '''
-        }
-      }
-    }
-
-    stage('Run Backend') {
-      steps {
-        sh '''
-          echo "🚀 Starting backend on port ${BACKEND_PORT}..."
-          pkill -f 'java -jar' || true
-          nohup java -jar FlightReservationApplication/target/*.jar --server.port=${BACKEND_PORT} > backend.log 2>&1 &
-          sleep 5
-          echo "✅ Backend started successfully on port ${BACKEND_PORT}"
-        '''
       }
     }
 
@@ -60,30 +32,20 @@ pipeline {
           echo "🚀 Deploying frontend to Nginx..."
           rm -rf /var/www/html/*
           cp -r frontend/dist/* /var/www/html/
+          systemctl restart nginx || true
           echo "✅ Frontend deployed successfully!"
         '''
       }
     }
 
-    stage('Health Check') {
-      steps {
-        sh '''
-          echo "🔍 Checking endpoints..."
-          echo "Backend:"; curl -I http://localhost:${BACKEND_PORT} || true
-          echo "Frontend:"; curl -I http://localhost || true
-        '''
-      }
-    }
   }
 
   post {
     success {
-      echo "✅ Deployment Completed Successfully!"
-      echo "🌐 Backend:  http://<jenkins-public-ip>:${BACKEND_PORT}"
-      echo "💻 Frontend: http://<jenkins-public-ip>"
+      echo "✅ Frontend ready at: http://<jenkins-public-ip>"
     }
     failure {
-      echo "❌ Deployment Failed! Check Jenkins console logs."
+      echo "❌ Deployment failed! Check Jenkins logs."
     }
   }
 }
