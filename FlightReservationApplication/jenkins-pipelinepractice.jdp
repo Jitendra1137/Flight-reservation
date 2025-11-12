@@ -2,31 +2,22 @@ pipeline {
   agent any
 
   environment {
-    // --- Database Configuration ---
     DB_HOST = "database.cp2oyu6myvq8.ap-south-1.rds.amazonaws.com"
     DB_NAME = "flightdb"
     DB_USER = "admin"
     DB_PASS = "admin1234"
 
-    // --- Application Info ---
-    BACKEND_PORT = "8080"
+    BACKEND_PORT = "9090"  // ✅ changed port
   }
 
   stages {
 
-    /* --------------------------
-       1️⃣  CHECKOUT CODE
-    -------------------------- */
     stage('Checkout Code') {
       steps {
-        echo "📦 Cloning repository..."
         git branch: 'main', url: 'https://github.com/Jitendra1137/Flight-reservation.git'
       }
     }
 
-    /* --------------------------
-       2️⃣  BUILD BACKEND
-    -------------------------- */
     stage('Build Backend') {
       steps {
         dir('FlightReservationApplication') {
@@ -38,24 +29,18 @@ pipeline {
       }
     }
 
-    /* --------------------------
-       3️⃣  RUN BACKEND
-    -------------------------- */
     stage('Run Backend') {
       steps {
         sh '''
           echo "🚀 Starting backend on port ${BACKEND_PORT}..."
           pkill -f 'java -jar' || true
-          nohup java -jar FlightReservationApplication/target/*.jar > backend.log 2>&1 &
+          nohup java -jar FlightReservationApplication/target/*.jar --server.port=${BACKEND_PORT} > backend.log 2>&1 &
           sleep 5
-          echo "✅ Backend started successfully"
+          echo "✅ Backend started successfully on port ${BACKEND_PORT}"
         '''
       }
     }
 
-    /* --------------------------
-       4️⃣  BUILD FRONTEND
-    -------------------------- */
     stage('Build Frontend') {
       steps {
         dir('frontend') {
@@ -69,28 +54,21 @@ pipeline {
       }
     }
 
-    /* --------------------------
-       5️⃣  DEPLOY FRONTEND (No sudo)
-    -------------------------- */
     stage('Deploy Frontend') {
       steps {
         sh '''
           echo "🚀 Deploying frontend to Nginx..."
           rm -rf /var/www/html/*
           cp -r frontend/dist/* /var/www/html/
-          systemctl restart nginx || true
           echo "✅ Frontend deployed successfully!"
         '''
       }
     }
 
-    /* --------------------------
-       6️⃣  HEALTH CHECK
-    -------------------------- */
     stage('Health Check') {
       steps {
         sh '''
-          echo "🔍 Checking services..."
+          echo "🔍 Checking endpoints..."
           echo "Backend:"; curl -I http://localhost:${BACKEND_PORT} || true
           echo "Frontend:"; curl -I http://localhost || true
         '''
