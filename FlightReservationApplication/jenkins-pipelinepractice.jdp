@@ -8,26 +8,25 @@ pipeline {
     DB_USER = "admin"
     DB_PASS = "admin1234"
 
-    // --- Server Info ---
-    BACKEND_IP = "13.233.142.157"   // Jenkins/Backend Server IP
+    // --- App Info ---
     BACKEND_PORT = "8080"
-    FRONTEND_IP = "35.154.94.69"    // Frontend (Nginx + NodeJS) Server IP
+    FRONTEND_PORT = "80"
   }
 
   stages {
 
     /* --------------------------
-       1️⃣  CLONE SOURCE CODE
+       1️⃣ CHECKOUT CODE
     -------------------------- */
-    stage('Checkout Source Code') {
+    stage('Checkout Code') {
       steps {
-        echo "📦 Cloning source code from GitHub..."
+        echo "📦 Cloning repository..."
         git branch: 'main', url: 'https://github.com/Jitendra1137/Flight-reservation.git'
       }
     }
 
     /* --------------------------
-       2️⃣  BUILD BACKEND (Spring Boot)
+       2️⃣ BUILD BACKEND
     -------------------------- */
     stage('Build Backend') {
       steps {
@@ -41,59 +40,60 @@ pipeline {
     }
 
     /* --------------------------
-       3️⃣  RUN BACKEND ON JENKINS SERVER
+       3️⃣ RUN BACKEND
     -------------------------- */
-    stage('Run Backend on Jenkins Server') {
+    stage('Run Backend') {
       steps {
         sh '''
-          echo "🚀 Starting backend on Jenkins server..."
+          echo "🚀 Starting backend on port 8080..."
           pkill -f 'java -jar' || true
           nohup java -jar FlightReservationApplication/target/*.jar > backend.log 2>&1 &
           sleep 5
-          echo "✅ Backend running on port 8080"
+          echo "✅ Backend started successfully"
         '''
       }
     }
 
     /* --------------------------
-       4️⃣  BUILD FRONTEND REMOTELY (on Frontend Server)
+       4️⃣ BUILD FRONTEND
     -------------------------- */
-    stage('Build Frontend on Remote Server') {
+    stage('Build Frontend') {
       steps {
-        sshagent(['ec2-ssh-key']) {
+        dir('frontend') {
           sh '''
-          echo "⚙️ Building React frontend on remote server..."
-
-          ssh -o StrictHostKeyChecking=no ubuntu@${FRONTEND_IP} "
-            sudo rm -rf /home/ubuntu/frontend_build &&
-            mkdir -p /home/ubuntu/frontend_build &&
-            cd /home/ubuntu/frontend_build &&
-            git clone https://github.com/Jitendra1137/Flight-reservation.git . &&
-            cd frontend &&
-            echo 'VITE_API_URL=http://${BACKEND_IP}:${BACKEND_PORT}' > .env &&
-            npm install &&
-            npm run build &&
-            sudo rm -rf /var/www/html/* &&
-            sudo cp -r dist/* /var/www/html/ &&
-            sudo systemctl restart nginx
-          "
+            echo "⚙️ Building React frontend..."
+            echo "VITE_API_URL=http://localhost:${BACKEND_PORT}" > .env
+            npm install
+            npm run build
           '''
         }
       }
     }
+
+    /* --------------------------
+       5️⃣ DEPLOY FRONTEND (Nginx)
+    -------------------------- */
+    stage('Deploy Frontend') {
+      steps {
+        sh '''
+          echo "🚀 Deploying frontend to Nginx..."
+          sudo rm -rf /var/www/html/*
+          sudo cp -r frontend/dist/* /var/www/html/
+          sudo systemctl restart nginx
+          echo "✅ Frontend deployed successfully!"
+        '''
+      }
+    }
   }
 
-  /* --------------------------
-     ✅ POST ACTIONS
-  -------------------------- */
   post {
     success {
-      echo "✅ Deployment Successful!"
-      echo "🌐 Backend:  http://${BACKEND_IP}:${BACKEND_PORT}"
-      echo "💻 Frontend: http://${FRONTEND_IP}"
+      echo "✅ Deployment Completed Successfully!"
+      echo "🌐 Backend:  http://<jenkins-public-ip>:8080"
+      echo "💻 Frontend: http://<jenkins-public-ip>"
     }
     failure {
-      echo "❌ Deployment Failed! Check Jenkins logs."
+      echo "❌ Deployment Failed! Check Jenkins console logs."
     }
   }
 }
