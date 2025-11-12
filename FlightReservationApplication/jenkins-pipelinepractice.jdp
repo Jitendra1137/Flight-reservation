@@ -18,7 +18,7 @@ pipeline {
         dir('frontend') {
           sh '''
             echo "⚙️ Building React frontend..."
-            echo "VITE_API_URL=http://localhost:${BACKEND_PORT}" > .env
+            echo "VITE_API_URL=http://13.233.142.157:${BACKEND_PORT}" > .env
             npm install
             npm run build
           '''
