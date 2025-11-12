@@ -1,0 +1,113 @@
+pipeline {
+  agent any
+
+  tools {
+    jdk 'jdk17'
+    maven 'maven'
+    nodejs 'node20'
+  }
+
+  environment {
+    // --- Database Configuration ---
+    DB_HOST = "database.cp2oyu6myvq8.ap-south-1.rds.amazonaws.com"
+    DB_NAME = "flightdb"
+    DB_USER = "admin"
+    DB_PASS = "admin1234"
+
+    // --- Backend & Frontend Info ---
+    BACKEND_IP = "13.233.142.157"    // Jenkins server public IP (backend)
+    BACKEND_PORT = "8080"
+    FRONTEND_IP = "35.154.94.69"     // Frontend EC2 public IP (Nginx server)
+  }
+
+  stages {
+
+    /* --------------------------
+       1️⃣  CLONE SOURCE CODE
+    -------------------------- */
+    stage('Checkout Source Code') {
+      steps {
+        echo "📦 Cloning source code from GitHub..."
+        git branch: 'main', url: 'https://github.com/Jitendra1137/Flight-reservation.git'
+      }
+    }
+
+    /* --------------------------
+       2️⃣  BUILD BACKEND (Maven)
+    -------------------------- */
+    stage('Build Backend') {
+      steps {
+        dir('FlightReservationApplication') {
+          sh '''
+            echo "⚙️ Building Spring Boot backend..."
+            mvn clean package -DskipTests
+          '''
+        }
+      }
+    }
+
+    /* --------------------------
+       3️⃣  RUN BACKEND ON JENKINS SERVER
+    -------------------------- */
+    stage('Run Backend on Jenkins Server') {
+      steps {
+        sh '''
+          echo "🚀 Starting backend on Jenkins server..."
+          pkill -f 'java -jar' || true
+          nohup java -jar FlightReservationApplication/target/*.jar > backend.log 2>&1 &
+          sleep 5
+          echo "✅ Backend started on port 8080"
+        '''
+      }
+    }
+
+    /* --------------------------
+       4️⃣  BUILD FRONTEND (React)
+    -------------------------- */
+    stage('Build Frontend') {
+      steps {
+        dir('frontend') {
+          sh '''
+            echo "⚙️ Building React frontend..."
+            echo "VITE_API_URL=http://${BACKEND_IP}:${BACKEND_PORT}" > .env
+            npm install
+            npm run build
+          '''
+        }
+      }
+    }
+
+    /* --------------------------
+       5️⃣  DEPLOY FRONTEND TO NGINX SERVER
+    -------------------------- */
+    stage('Deploy Frontend to Nginx Server') {
+      steps {
+        sshagent(['ec2-ssh-key']) {
+          sh '''
+            echo "🚀 Deploying frontend to Nginx server..."
+            scp -r -o StrictHostKeyChecking=no frontend/dist/* ubuntu@${FRONTEND_IP}:/tmp/dist/
+            ssh -o StrictHostKeyChecking=no ubuntu@${FRONTEND_IP} "
+              sudo rm -rf /var/www/html/*
+              sudo cp -r /tmp/dist/* /var/www/html/
+              sudo systemctl restart nginx
+            "
+          '''
+        }
+      }
+    }
+  }
+
+  /* --------------------------
+     ✅ POST STAGES
+  -------------------------- */
+  post {
+    success {
+      echo "✅ Deployment Successful!"
+      echo "🌐 Backend:  http://${BACKEND_IP}:${BACKEND_PORT}"
+      echo "💻 Frontend: http://${FRONTEND_IP}"
+    }
+    failure {
+      echo "❌ Deployment Failed! Check Jenkins console output for details."
+    }
+  }
+}
