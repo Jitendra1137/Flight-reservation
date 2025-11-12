@@ -3,12 +3,13 @@ pipeline {
     stages {
         stage('Pull') {
             steps {
-                echo 'PULL'
+                git branch: 'main', url: 'https://github.com/Jitendra1137/Flight-reservation.git'
             }
         }
         stage('Build') {
             steps {
-                echo 'BUILD'
+               sh '''mvn clean package 
+               '''
             }
         }
         stage('Test') {
